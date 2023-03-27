@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    # 更新说明信息
+    kubernetes.io/change-cause: ${change_cause}
+  labels:
+    app: ${app_name}
+    url: jwx-gm.py.polarwin.cc
+  name: ${app_name}
+  namespace: py
+
+spec:
+  # ReplicaSet保留个数
+  revisionHistoryLimit: 3
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${app_name}
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: ${app_name}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - ${app_name}
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+      containers:
+        - image: harbor.polarwin.cc/py/${app_name}:${version}
+          imagePullPolicy: IfNotPresent
+          name: ${app_name}
+          resources:
+            requests:
+              cpu: 5m
+              memory: 1Gi
+              ephemeral-storage: 4Gi
+          startupProbe:
+            tcpSocket:
+              port: 8008
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 6
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${app_name}-svc
+  namespace: py
+spec:
+  selector:
+    app: ${app_name}
+  ports:
+    - port: 8008
+      targetPort: 8008
+      protocol: TCP
